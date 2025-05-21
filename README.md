@@ -19,9 +19,9 @@ This package provides a CMSIS-DRIVER inteface to peripherals on [TI MSPM0 microc
 
 This package currently supports the following CMSIS-Driver modules:
 - Driver_USART (configurable with DMA or interrupt driven I/O)
+- Driver_I2C (configurable with DMA or interrupt driven I/O)
 
 The following additional CMSIS-Driver modules are planned for future versions of this package:
-- Driver_I2C (configurable with DMA or interrupt driven I/O)
 - Driver_SPI (configurable with DMA or interrupt driven I/O)
 - Driver_GPIO (configurable with DMA or interrupt driven I/O)
 
@@ -53,24 +53,35 @@ The repository contains the following directories:
     - /CMSIS/Drivers (These are the Arm standard interface files)
         - Driver_Common.h
         - Driver_USART.h
+        - Driver_I2C.h
     - /Drivers (These are the TI implementation back end source files)
         - /V0
             - Driver_USART_MSP_Priv.h
             - Driver_USART_MSP_Priv.c
+            - Driver_I2C_MSP_Priv.h
+            - Driver_I2C_MSP_Priv.c
     - /Drivers_Interface (These are the TI implementation front end source files)
         - Driver_Common_MSP.h
         - Driver_USART_MSP.h
         - Driver_USART_MSP.c
+        - Driver_I2C_MSP.h
+        - Driver_I2C_MSP.c
 - /examples (These are the code examples for the LaunchPad EVMs and Code Composer Studio)
     - /nortos
         - /LP_MSPM0G3507
             - /cmsis_driver_uart
                 - /cmsis-driver-usart-echo (This is the USART echo code example for MSPM0G3507)
                 - /cmsis-driver-usart-loopback-dma (This is the USART dual-driver / DMA code example for MSPM0G3507)
+            - /cmsis_driver_i2c
+                - /cmsis-driver-i2c-transmit-receive (This is the I2C transmit and receieve code example for MSPM0G3507)
+                - /cmsis-driver-i2c-transmit-receive-dma (This is the I2C transmit and receieve w/ DMA code example for MSPM0G3507)
         - /LP_MSPM0G3519
             - /cmsis_driver_uart
                 - /cmsis-driver-usart-echo (This is the USART echo code example for MSPM0G3507)
                 - /cmsis-driver-usart-loopback-dma (This is the USART dual-driver / DMA code example for MSPM0G3519)
+            - /cmsis_driver_i2c
+                - /cmsis-driver-i2c-transmit-receive (This is the I2C transmit and receieve code example for MSPM0G3507)
+                - /cmsis-driver-i2c-transmit-receive-dma (This is the I2C transmit and receieve w/ DMA code example for MSPM0G3507)
 
 ### Quick Start
 
@@ -92,7 +103,7 @@ The MSP-CMSIS-DRIVER package is delivered as source only.  Build of the drivers 
 
 ### CMSIS-Driver Static Configuration Procedures
 
-The MSP-CMSIS-DRIVER modules (at this time, the USART module) do not require any configuration in the SysConfig visual configuration tool.  The following static properties of each driver instance must be configured in a file named *Driver_Config_MSP.h*"* and subsequently included in the build include path.
+The MSP-CMSIS-DRIVER modules do not require any configuration in the SysConfig visual configuration tool.  The static properties of each driver instance must be configured in a file named *Driver_Config_MSP.h*"* and subsequently included in the build include path.
 
 #### Driver_USART Static Configuration
 
@@ -161,6 +172,60 @@ To add more instances, simply copy and past the configuration block and update i
 ```
 To include MSP-CMSIS-DRIVER software in another project, all that is required is to bring in the /msp-cmsis-driver directory to the project, and the corresponding include paths, and add a Driver_Config_MSP.h to the project (example shown above) to provide the static configurations for the driver instances.
 
+#### Driver_I2C Static Configuration
+
+The Driver_I2C module requires the definitions below to be placed in the *Driver_Config_MSP.h* file for each instance.  The code examples already include this file.
+These definitions specify the static driver configuration parameters which are not exposed through runtime APIs.
+
+- SCL pin mux index and port function selection 
+- SDA pin mux index and port function selection
+- Clock selection and frequency
+- Transmit DMA hardware instance, channel, trigger (optional)
+- Receive DMA hardware instance, channel, trigger (optional)
+
+Two configurations are shown in an example *Driver_Config_MSP.h* below, one for I2C0 and a second for I2C1.  The I2C0 configuration does not configure DMA channels for transmit and receive.  As such, I2C0 will use interrupt driven input/output.  The I2C1 configuration is configured to use the DMA for transmit and receive. As such, I2C1 will use DMA driven input/output.  
+
+To add more instances, simply copy and past the configuration block and update it for the parameters used by the desired I2C instance.  The device datasheet may be referred to for identifying pin configurations (IOMUX PINCM, PF).  If the peripheral clock sources/frequencies are updated, note that the CLOCK_FREQ parameter must too be updated to ensure correct bus speed calculations.
+
+```
+/* I2C Driver Configuration Options */
+
+/* Driver_I2C0 Configuration (Maps to MSP hardware I2C0 peripheral) */
+#define DRIVER_CONFIG_HAS_I2C0 (1)
+#if (DRIVER_CONFIG_HAS_I2C0==1) && defined(I2C0_BASE)
+#define DRIVER_I2C0_SDA_PINCM               (IOMUX_PINCM1)
+#define DRIVER_I2C0_SDA_PF                  (IOMUX_PINCM1_PF_I2C0_SDA)
+#define DRIVER_I2C0_SCL_PINCM               (IOMUX_PINCM2)
+#define DRIVER_I2C0_SCL_PF                  (IOMUX_PINCM2_PF_I2C0_SCL)
+#define DRIVER_I2C0_CLOCK_SEL               (DRIVER_CLK_MSP_BUSCLK)
+#define DRIVER_I2C0_CLOCK_FREQ              (32000000U)
+#define DRIVER_I2C0_TRANSMIT_DMA_HW         (DRIVER_DMA_HW_NONE)
+#define DRIVER_I2C0_TRANSMIT_DMA_CH         (DRIVER_DMA_CH_NONE)
+#define DRIVER_I2C0_TRANSMIT_DMA_TRIG       (DRIVER_DMA_TRIG_NONE)
+#define DRIVER_I2C0_RECEIVE_DMA_HW          (DRIVER_DMA_HW_NONE)
+#define DRIVER_I2C0_RECEIVE_DMA_CH          (DRIVER_DMA_CH_NONE)
+#define DRIVER_I2C0_RECEIVE_DMA_TRIG        (DRIVER_DMA_TRIG_NONE)
+#endif
+
+/* Driver_I2C1 Configuration (Maps to MSP hardware I2C1 peripheral) */
+#define DRIVER_CONFIG_HAS_I2C1 (1)
+#if (DRIVER_CONFIG_HAS_I2C1==1) && defined(I2C1_BASE)
+#define DRIVER_I2C1_SDA_PINCM               (IOMUX_PINCM16)
+#define DRIVER_I2C1_SDA_PF                  (IOMUX_PINCM16_PF_I2C1_SDA)
+#define DRIVER_I2C1_SCL_PINCM               (IOMUX_PINCM15)
+#define DRIVER_I2C1_SCL_PF                  (IOMUX_PINCM15_PF_I2C1_SCL)
+#define DRIVER_I2C1_CLOCK_SEL               (DRIVER_CLK_MSP_BUSCLK)
+#define DRIVER_I2C1_CLOCK_FREQ              (32000000U)
+#define DRIVER_I2C1_TRANSMIT_DMA_HW         (DMA)
+#define DRIVER_I2C1_TRANSMIT_DMA_CH         (2U)
+#define DRIVER_I2C1_TRANSMIT_DMA_TRIG       (DMA_I2C1_TX_TRIG)
+#define DRIVER_I2C1_RECEIVE_DMA_HW          (DMA)
+#define DRIVER_I2C1_RECEIVE_DMA_CH          (3U)
+#define DRIVER_I2C1_RECEIVE_DMA_TRIG        (DMA_I2C1_RX_TRIG)
+#endif
+```
+To include MSP-CMSIS-DRIVER software in another project, all that is required is to bring in the /msp-cmsis-driver directory to the project, and the corresponding include paths, and add a Driver_Config_MSP.h to the project (example shown above) to provide the static configurations for the driver instances.
+
 ## Supported Devices
 
 The following LaunchPad evaluation kits are currently supported with code examples in this package:
@@ -219,6 +284,29 @@ The Driver_USART module supports the following capabilities:
 | MSPSWSDK-5153 | [SPS] CMSIS-Driver USART module DMA driven I/O | The MSP-CMSIS-DRIVER UART module shall provide an option for using DMA driven non-blocking input/output for transmit and receive operations, configured statically on a per-instance basis. | Implemented |
 | MSPSWSDK-5154 | [SPS] CMSIS-Driver USART module loopback code example with DMA | The MSP-CMSIS-Driver product shall include a code example demonstrating USART in a loopback configuration with an external wire for loopback, demonstrating setup and teardown of the driver and use of DMA. | Implemented |
 | MSPSWSDK-5245 | [SPS] CMSIS-Driver USART module back channel UART example | The MSP-CMSIS-DRIVER product shall include a code example for USART transmit / receive in a back channel configuration with the XDS-110. | Implemented |
+
+### Driver_I2C Specifications
+The Driver_I2C module supports the following capabilities:
+
+| Req ID        | Description             | Summary                                              | Status |
+| --------------|-------------------------|------------------------------------------------------|--------|
+| MSPSWSDK-5427 | [SPS] CMSIS-Driver I2C module feature: Controller mode | The MSP-CMSIS-DRIVER I2C module shall provide an option for operating in controller mode. | Implemented |
+| MSPSWSDK-5428 | [SPS] CMSIS-Driver I2C module feature: Target mode | The MSP-CMSIS-DRIVER I2C module shall provide an option for operating in target mode. | Implemented |
+| MSPSWSDK-5429 | [SPS] CMSIS-Driver I2C module feature: Transfer done event | The MSP-CMSIS-DRIVER I2C module shall provide a transfer done event fired when a transfer completes. | Implemented |
+| MSPSWSDK-5430 | [SPS] CMSIS-Driver I2C module feature: Transfer Incomplete event | The MSP-CMSIS-DRIVER I2C module shall provide a transfer imcompleted event fired when a transfer does not complete successfully. | Implemented |
+| MSPSWSDK-5431 | [SPS] CMSIS-Driver I2C module feature: Arbitration loss event | The MSP-CMSIS-DRIVER I2C module shall provide an arbitration lost event fired when bus abitration is lost. | Implemented |
+| MSPSWSDK-5432 | [SPS] CMSIS-Driver I2C module feature: Bus error event | The MSP-CMSIS-DRIVER I2C module shall provide a bus error event fired when there is an I2C bus error.| Implemented |
+| MSPSWSDK-5433 | [SPS] CMSIS-Driver I2C module feature: General call event | The MSP-CMSIS-DRIVER I2C module shall provide a general call event fired when a target is addressed via general call. | Implemented |
+| MSPSWSDK-5434 | [SPS] CMSIS-Driver I2C module feature: Bus clear event| The MSP-CMSIS-DRIVER I2C module shall provide a bus clear event fired when the I2C bus is cleared via 9 clock pulses. | Implemented |
+| MSPSWSDK-5435 | [SPS] CMSIS-Driver I2C module feature: Address NACK event | The MSP-CMSIS-DRIVER I2C module shall provide a NACK event fired when the controller receives a NACK response.| Implemented |
+| MSPSWSDK-5436 | [SPS] CMSIS-Driver I2C module feature: Slave transmit event | The MSP-CMSIS-DRIVER I2C module shall provide a slave transmit event fired when the target is addressed to write but SlaveTransmit was not called. | Implemented |
+| MSPSWSDK-5437 | [SPS] CMSIS-Driver I2C module feature: Slave receive event | The MSP-CMSIS-DRIVER I2C module shall provide a slave receive event fired when the target is addressed to read but SlaveReceive was not called.| Implemented |
+| MSPSWSDK-5438 | [SPS] CMSIS-Driver I2C module feature: Bus speed selection | The MSP-CMSIS-DRIVER I2C module shall provide an option of selecting different bus speeds for the I2C driver. | Implemented |
+| MSPSWSDK-5439 | [SPS] CMSIS-Driver I2C module feature: I2C own address selection | The MSP-CMSIS-DRIVER I2C module shall provide an option for a target to set its own address.| Implemented |
+| MSPSWSDK-5440 | [SPS] CMSIS-Driver I2C module feature: 10-bit address mode | The MSP-CMSIS-DRIVER I2C module shall provide an option for a target to use a 10-bit addressing mode. | Implemented |
+| MSPSWSDK-5441 | [SPS] CMSIS-Driver I2C module feature: DMA driven transfers | The MSP-CMSIS-DRIVER I2C module shall provide an option for using DMA-driven non-blocking transfers. | Implemented |
+| MSPSWSDK-5442 | [SPS] CMSIS-Driver I2C Controller and Target transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers between controller and target. | Implemented |
+| MSPSWSDK-5446 | [SPS] CMSIS-Driver I2C Controller and Target w/ DMA transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers with DMA between controller and target. | Implemented |
 
 ## Known Issues
 
