@@ -20,10 +20,8 @@ This package provides a CMSIS-DRIVER inteface to peripherals on [TI MSPM0 microc
 This package currently supports the following CMSIS-Driver modules:
 - Driver_USART (configurable with DMA or interrupt driven I/O)
 - Driver_I2C (configurable with DMA or interrupt driven I/O)
-
-The following additional CMSIS-Driver modules are planned for future versions of this package:
 - Driver_SPI (configurable with DMA or interrupt driven I/O)
-- Driver_GPIO (configurable with DMA or interrupt driven I/O)
+- Driver_GPIO
 
 The package is developed to be compatible with [CMSIS-DRIVER 2.10.0](https://arm-software.github.io/CMSIS_6/main/Driver/index.html).
 
@@ -54,18 +52,28 @@ The repository contains the following directories:
         - Driver_Common.h
         - Driver_USART.h
         - Driver_I2C.h
+        - Driver_SPI.h
+        - Driver_GPIO.h
     - /Drivers (These are the TI implementation back end source files)
         - /V0
             - Driver_USART_MSP_Priv.h
             - Driver_USART_MSP_Priv.c
             - Driver_I2C_MSP_Priv.h
             - Driver_I2C_MSP_Priv.c
+            - Driver_SPI_MSP_Priv.h
+            - Driver_SPI_MSP_Priv.c
+            - Driver_GPIO_MSP_Priv.h
+            - Driver_GPIO_MSP_Priv.c
     - /Drivers_Interface (These are the TI implementation front end source files)
         - Driver_Common_MSP.h
         - Driver_USART_MSP.h
         - Driver_USART_MSP.c
         - Driver_I2C_MSP.h
         - Driver_I2C_MSP.c
+        - Driver_SPI_MSP.h
+        - Driver_SPI_MSP.c
+        - Driver_GPIO_MSP.h
+        - Driver_GPIO_MSP.c
 - /examples (These are the code examples for the LaunchPad EVMs and Code Composer Studio)
     - /nortos
         - /LP_MSPM0G3507
@@ -75,13 +83,27 @@ The repository contains the following directories:
             - /cmsis_driver_i2c
                 - /cmsis-driver-i2c-transmit-receive (This is the I2C transmit and receieve code example for MSPM0G3507)
                 - /cmsis-driver-i2c-transmit-receive-dma (This is the I2C transmit and receieve w/ DMA code example for MSPM0G3507)
+            - /cmsis_driver_spi
+                - /cmsis-driver-spi-controller (This is the SPI controller code example for MSPM0G3507)
+                - /cmsis-driver-spi-controller-dma (This is the SPI controller w/ DMA code example for MSPM0G3507)
+                - /cmsis-driver-spi-target (This is the SPI target code example for MSPM0G3507)
+                - /cmsis-driver-spi-target-dma (This is the SPI target w/ DMA code example for MSPM0G3507)
+            -/cmsis_driver_gpio
+                -/cmsis-driver-gpio-button-toggle (Example LED toggle on each button press)
         - /LP_MSPM0G3519
             - /cmsis_driver_uart
                 - /cmsis-driver-usart-echo (This is the USART echo code example for MSPM0G3507)
                 - /cmsis-driver-usart-loopback-dma (This is the USART dual-driver / DMA code example for MSPM0G3519)
             - /cmsis_driver_i2c
-                - /cmsis-driver-i2c-transmit-receive (This is the I2C transmit and receieve code example for MSPM0G3507)
-                - /cmsis-driver-i2c-transmit-receive-dma (This is the I2C transmit and receieve w/ DMA code example for MSPM0G3507)
+                - /cmsis-driver-i2c-transmit-receive (This is the I2C transmit and receieve code example for MSPM0G3519)
+                - /cmsis-driver-i2c-transmit-receive-dma (This is the I2C transmit and receieve w/ DMA code example for MSPM0G3519)
+            - /cmsis_driver_spi
+                - /cmsis-driver-spi-controller (This is the SPI controller code example for MSPM0G3519)
+                - /cmsis-driver-spi-controller-dma (This is the SPI controller w/ DMA code example for MSPM0G3519)
+                - /cmsis-driver-spi-target (This is the SPI target code example for MSPM0G3519)
+                - /cmsis-driver-spi-target-dma (This is the SPI target w/ DMA code example for MSPM0G3519)
+            -/cmsis_driver_gpio
+                -/cmsis-driver-gpio-button-toggle (Example LED toggle on each button press)
 
 ### Quick Start
 
@@ -226,6 +248,103 @@ To add more instances, simply copy and past the configuration block and update i
 ```
 To include MSP-CMSIS-DRIVER software in another project, all that is required is to bring in the /msp-cmsis-driver directory to the project, and the corresponding include paths, and add a Driver_Config_MSP.h to the project (example shown above) to provide the static configurations for the driver instances.
 
+#### Driver_SPI Static Configuration
+
+The Driver_SPI module requires the definitions below to be placed in the *Driver_Config_MSP.h* file for each instance.  The code examples already include this file.
+These definitions specify the static driver configuration parameters which are not exposed through runtime APIs.
+
+- MOSI pin mux index and port function selection 
+- MISO pin mux index and port function selection
+- SS pin mux index and port function selection 
+- SS GPIO Port location (required for SW controlled SS)
+- SS GPIO Pin Number (required for SW controlled SS)
+- SCLK pin mux index and port function selection
+- Clock selection and frequency
+- Transmit DMA hardware instance, channel, trigger (optional)
+- Receive DMA hardware instance, channel, trigger (optional)
+    - Note that for a Transfer with DMA, it is required that both the transmit and receive DMA are available. 
+
+When calling initialize for a given driver, since it is not yet known what mode the driver will be configured in (master or slave), no pin configuration will occur and will instead be left in the default MCU state. Pin configuration is deferred to Control with control parameter ARM_SPI_MODE_MASTER or AMR_SPI_MODE_SLAVE. 
+
+Two configurations are shown in an example *Driver_Config_MSP.h* below, one for SPI0 and a second for SPI1.  The SPI0 configuration does not configure DMA channels for transmit and receive.  As such, SPI0 will use interrupt driven input/output.  The SPI1 configuration is configured to use the DMA for transmit and receive. As such, SPI1 will use DMA driven input/output.
+
+To add more instances, simply copy and past the configuration block and update it for the parameters used by the desired SPI instance.  The device datasheet may be referred to for identifying pin configurations (IOMUX PINCM, PF).  If the peripheral clock sources/frequencies are updated, note that the CLOCK_FREQ parameter must too be updated to ensure correct bus speed calculations.
+
+```
+/* I2C Driver Configuration Options */
+
+/* Driver_SPI0 Configuration (Maps to MSP hardware SPI0 peripheral) */
+#define DRIVER_CONFIG_HAS_SPI0 (1)
+#if (DRIVER_CONFIG_HAS_SPI0==1) && defined(SPI0_BASE)
+#define DRIVER_SPI0_MOSI_PINCM              (IOMUX_PINCM43)
+#define DRIVER_SPI0_MOSI_PF                 (IOMUX_PINCM43_PF_SPI0_PICO)
+#define DRIVER_SPI0_MISO_PINCM              (IOMUX_PINCM21)
+#define DRIVER_SPI0_MISO_PF                 (IOMUX_PINCM21_PF_SPI0_POCI)
+#define DRIVER_SPI0_SS                      (DL_SPI_CHIP_SELECT_0)
+#define DRIVER_SPI0_SS_GPIO_PORT            (GPIOA)
+#define DRIVER_SPI0_SS_PIN_NUMBER           (DL_GPIO_PIN_8)
+#define DRIVER_SPI0_SS_PINCM                (IOMUX_PINCM19)
+#define DRIVER_SPI0_SS_PF                   (IOMUX_PINCM19_PF_SPI0_CS0)
+#define DRIVER_SPI0_SCLK_PINCM              (IOMUX_PINCM22)
+#define DRIVER_SPI0_SCLK_PF                 (IOMUX_PINCM22_PF_SPI0_SCLK)
+#define DRIVER_SPI0_CLOCK_SEL               (DRIVER_CLK_MSP_BUSCLK)
+#define DRIVER_SPI0_CLOCK_FREQ              (32000000U)
+#define DRIVER_SPI1_TRANSMIT_DMA_HW         (DRIVER_DMA_HW_NONE)
+#define DRIVER_SPI1_TRANSMIT_DMA_CH         (DRIVER_DMA_CH_NONE)
+#define DRIVER_SPI1_TRANSMIT_DMA_TRIG       (DRIVER_DMA_TRIG_NONE)
+#define DRIVER_SPI1_RECEIVE_DMA_HW          (DRIVER_DMA_HW_NONE)
+#define DRIVER_SPI1_RECEIVE_DMA_CH          (DRIVER_DMA_CH_NONE)
+#define DRIVER_SPI1_RECEIVE_DMA_TRIG        (DRIVER_DMA_TRIG_NONE)
+#endif
+
+/* Driver_spi1 Configuration (Maps to MSP hardware SPI1 peripheral) */
+#define DRIVER_CONFIG_HAS_SPI1 (1)
+#if (DRIVER_CONFIG_HAS_SPI1==1) && defined(SPI1_BASE)
+#define DRIVER_SPI1_MOSI_PINCM              (IOMUX_PINCM25)
+#define DRIVER_SPI1_MOSI_PF                 (IOMUX_PINCM25_PF_SPI1_PICO)
+#define DRIVER_SPI1_MISO_PINCM              (IOMUX_PINCM24)
+#define DRIVER_SPI1_MISO_PF                 (IOMUX_PINCM24_PF_SPI1_POCI)
+#define DRIVER_SPI1_SS                      (DL_SPI_CHIP_SELECT_0)
+#define DRIVER_SPI1_SS_GPIO_PORT            (GPIOA)
+#define DRIVER_SPI1_SS_PIN_NUMBER           (DL_GPIO_PIN_2)
+#define DRIVER_SPI1_SS_PINCM                (IOMUX_PINCM7)
+#define DRIVER_SPI1_SS_PF                   (IOMUX_PINCM7_PF_SPI1_CS0)
+#define DRIVER_SPI1_SCLK_PINCM              (IOMUX_PINCM26)
+#define DRIVER_SPI1_SCLK_PF                 (IOMUX_PINCM26_PF_SPI1_SCLK)
+#define DRIVER_SPI1_CLOCK_SEL               (DRIVER_CLK_MSP_BUSCLK)
+#define DRIVER_SPI1_CLOCK_FREQ              (32000000U)
+#define DRIVER_SPI1_TRANSMIT_DMA_HW         (DMA)
+#define DRIVER_SPI1_TRANSMIT_DMA_CH         (0U)
+#define DRIVER_SPI1_TRANSMIT_DMA_TRIG       (DMA_SPI0_TX_TRIG)
+#define DRIVER_SPI1_RECEIVE_DMA_HW          (DRIVER_DMA_HW_NONE)
+#define DRIVER_SPI1_RECEIVE_DMA_CH          (1U)
+#define DRIVER_SPI1_RECEIVE_DMA_TRIG        (DMA_SPI0_RX_TRIG)
+#endif
+```
+
+#### Driver_GPIO Static Configuration
+
+The Driver_GPIO only requires specifying which GPIO ports will be used in the *Driver_Config_MSP.h* file. An example is shown below. The code examples already include this file.
+These definitions specify the static driver configuration parameters which are not exposed through runtime APIs. To see what GPIO ports and pins are available for a certain device,
+refer to the datasheet.
+
+All IOMUX values are automatically generated in the driver and configuration is handled within the APIs. To interact with an I/O pin, pass a value for ARM_GPIO_Pin_t corresponding
+to the pin number within the specific GPIO port. For instance, to use PA10, pass in 10 to all CMSIS-GPIO APIs.
+
+To use a pin as an input, first call Setup() followed by SetDirection() with ARM_GPIO_INPUT. After this, optionally configure pull resistors or event triggers.
+
+To use a pin as an output, first call Setup() followed by SetDirection() with ARM_GPIO_OUTPUT. Calling SetOutputMode() is optional unless open-drain configuration is specifically desired.
+
+```
+/* GPIO Driver Configuration Options */
+
+#define DRIVER_CONFIG_HAS_GPIOA (0)
+#define DRIVER_CONFIG_HAS_GPIOB (1)
+#define DRIVER_CONFIG_HAS_GPIOC (0)
+```
+
+To include MSP-CMSIS-DRIVER software in another project, all that is required is to bring in the /msp-cmsis-driver directory to the project, and the corresponding include paths, and add a Driver_Config_MSP.h to the project (example shown above) to provide the static configurations for the driver instances.
+
 ## Supported Devices
 
 The following LaunchPad evaluation kits are currently supported with code examples in this package:
@@ -307,6 +426,41 @@ The Driver_I2C module supports the following capabilities:
 | MSPSWSDK-5441 | [SPS] CMSIS-Driver I2C module feature: DMA driven transfers | The MSP-CMSIS-DRIVER I2C module shall provide an option for using DMA-driven non-blocking transfers. | Implemented |
 | MSPSWSDK-5442 | [SPS] CMSIS-Driver I2C Controller and Target transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers between controller and target. | Implemented |
 | MSPSWSDK-5446 | [SPS] CMSIS-Driver I2C Controller and Target w/ DMA transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers with DMA between controller and target. | Implemented |
+
+## Driver_SPI Specifications
+
+The Driver_SPI module supports the following capabilities:
+
+| Req ID        | Description             | Summary                                              | Status |
+| --------------|-------------------------|------------------------------------------------------|--------|
+| MSPSWSDK-5677 | [SPS] CMSIS-Driver SPI module feature: Controller mode | The MSP-CMSIS-DRIVER SPI module shall provide an option for operating in controller mode. | Implemented |
+| MSPSWSDK-5678 | [SPS] CMSIS-Driver SPI module feature: Target mode | The MSP-CMSIS-DRIVER SPI module shall provide an option for operating in target mode. | Implemented |
+| MSPSWSDK-5679 | [SPS] CMSIS-Driver SPI module feature: Transfer done event | The MSP-CMSIS-DRIVER SPI module shall provide a transfer done event fired when a transfer completes. | Implemented |
+| MSPSWSDK-5680 | [SPS] CMSIS-Driver SPI module feature: Data lost event | The MSP-CMSIS-DRIVER SPI module shall provide a data lost event fired when a slave device receives data but no operation was started. | Implemented |
+| MSPSWSDK-5681 | [SPS] CMSIS-Driver SPI module feature: Frame format selection | The MSP-CMSIS-DRIVER SPI module shall provide an option to select the frame format to be used in transmission.| Implemented |
+| MSPSWSDK-5682 | [SPS] CMSIS-Driver SPI module feature: Bus speed selection | The MSP-CMSIS-DRIVER SPI module shall provide an option to select the bus speed. | Implemented |
+| MSPSWSDK-5683 | [SPS] CMSIS-Driver SPI module feature: Get Bus Speed | The MSP-CMSIS-DRIVER SPI module shall provide an option to read the current bus speed. | Implemented |
+| MSPSWSDK-5684 | [SPS] CMSIS-Driver SPI module feature: Controller Chip Select Behavior | The MSP-CMSIS-DRIVER SPI module shall provide options to control how the controller uses the chip select line (software, hardware, none). | Implemented |
+| MSPSWSDK-5685 | [SPS] CMSIS-Driver SPI module feature: Target Chip Select Behavior | The MSP-CMSIS-DRIVER SPI module shall provide to control how the target uses the chip select line (software, hardware, none). | Implemented |
+| MSPSWSDK-5686 | [SPS] CMSIS-Driver SPI module feature: Data size | The MSP-CMSIS-DRIVER SPI module shall provide to control how many bits are in one frame. | Implemented |
+| MSPSWSDK-5687 | [SPS] CMSIS-Driver SPI module feature: Default TX Value | The MSP-CMSIS-DRIVER SPI module shall provide to control what default TX value is used. | Implemented |
+| MSPSWSDK-5688 | [SPS] CMSIS-Driver SPI module feature: DMA Driver Transfer | The MSP-CMSIS-DRIVER SPI module shall provide an option to use DMA driven transfers. | Implemented |
+| MSPSWSDK-5689 | [SPS] CMSIS-Driver SPI Controller and Target transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers between controller and target. | Implemented |
+| MSPSWSDK-5690 | [SPS] CMSIS-Driver SPI Controller and Target w/ DMA transfer example | The MSP-CMSIS-DRIVER product shall include an example showcasing transfers with DMA between controller and target. | Implemented |
+
+## Driver_GPIO Specifications
+
+The Driver_GPIO module supports the following capabilities:
+
+| Req ID        | Description             | Summary                                              | Status |
+| --------------|-------------------------|------------------------------------------------------|--------|
+| MSPSWSDK-5791 | [SPS] CMSIS-Driver GPIO module feature: Direction Control | The MSP-CMSIS-DRIVER GPIO module shall provide an option for configuring the direction of a pin. | Implemented |
+| MSPSWSDK-5792 | [SPS] CMSIS-Driver GPIO module feature: Output Mode Control | The MSP-CMSIS-DRIVER GPIO module shall allow configuration of output mode on a pin (push-pull or open-drain). | Implemented |
+| MSPSWSDK-5793 | [SPS] CMSIS-Driver GPIO module feature: Resistor Control | The MSP-CMSIS-DRIVER GPIO module shall allow configuration of the internal resistor on a pin for both input and output. | Implemented |
+| MSPSWSDK-5794 | [SPS] CMSIS-Driver GPIO module feature: Event Trigger Control | The MSP-CMSIS-DRIVER GPIO module shall allow configuration of edge-based interrupts on a pin. | Implemented |
+| MSPSWSDK-5795 | [SPS] CMSIS-Driver GPIO module feature: Output Control | The MSP-CMSIS-DRIVER GPIO module shall allow control of output on a pin. | Implemented |
+| MSPSWSDK-5796 | [SPS] CMSIS-Driver GPIO module feature: Read Input | The MSP-CMSIS-DRIVER GPIO shall allow reading the input of a pin. | Implemented |
+| MSPSWSDK-5797 | [SPS] CMSIS-Driver GPIO module feature: Trigger Event | The MSP-CMSIS-DRIVER GPIO shall provide a trigger edge event on a gpio pin via callback. | Implemented |
 
 ## Known Issues
 
