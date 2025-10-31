@@ -364,6 +364,10 @@ The software is currently tested against the following device variants:
 
 The drivers are expected to work without major modifications on additional MSPM0 devices.
 
+## Driver Validation
+
+The USART, I2C, SPI, and GPIO drivers are validated using the using the [CMSIS-Driver_Validation](https://github.com/ARM-software/CMSIS-Driver_Validation) tests.
+
 ## Specification
 
 The MSP-CMSIS-DRIVER package specifications are provided below for reference.
