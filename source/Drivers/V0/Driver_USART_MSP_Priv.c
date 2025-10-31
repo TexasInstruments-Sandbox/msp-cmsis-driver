@@ -300,6 +300,7 @@ int32_t MSP_ARM_USART_Initialize(DRIVER_USART_MSP *module,
         // If no IO is defined, we have nothing to configure.
     }
 
+    module->state->initDone = DRIVER_INITIALIZED;
     return ARM_DRIVER_OK;
 }
 
@@ -347,12 +348,18 @@ int32_t MSP_ARM_USART_Uninitialize(DRIVER_USART_MSP *module)
         // If no IO is defined, we have nothing to configure.
     }
 
+    module->state->initDone = DRIVER_UNINITIALIZED;
     return ARM_DRIVER_OK;
 }
 
 int32_t MSP_ARM_USART_PowerControl(DRIVER_USART_MSP *module, \
                                    ARM_POWER_STATE state)
 {
+    if(state != ARM_POWER_OFF && module->state->initDone != DRIVER_INITIALIZED)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+
     DL_UART_ClockConfig clkCfg;
     int32_t err;
     int32_t baudErr;
@@ -541,7 +548,7 @@ int32_t MSP_ARM_USART_Send(DRIVER_USART_MSP *module,
         // Valid parameters, no special action to take.
     }
 
-    if (module->state->transmitterEnabled == 0U)
+    if (module->state->powerState != ARM_POWER_FULL || module->state->transmitterEnabled == 0U)
     {
         return ARM_DRIVER_ERROR;
     }
@@ -633,7 +640,7 @@ int32_t MSP_ARM_USART_Receive(DRIVER_USART_MSP *module, void *data,
         // Valid data pointer and length, no special action to take
     }
 
-    if (module->state->receiverEnabled == 0U)
+    if (module->state->powerState != ARM_POWER_FULL || module->state->receiverEnabled == 0U)
     {
         return ARM_DRIVER_ERROR;
     }
@@ -747,7 +754,14 @@ int32_t MSP_ARM_USART_Transfer(DRIVER_USART_MSP *module, \
                                const void *data_out, void *data_in, \
                                uint32_t num)
 {
-    return ARM_DRIVER_ERROR_UNSUPPORTED;
+    if(module->state->powerState != ARM_POWER_FULL)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+    else
+    {
+        return ARM_DRIVER_ERROR_UNSUPPORTED;
+    }
 }
 
 uint32_t MSP_ARM_USART_GetTxCount(DRIVER_USART_MSP *module)
@@ -948,12 +962,7 @@ static int32_t MSP_ARM_USART_SetBaud(DRIVER_USART_MSP *module, uint32_t baud)
         // If not zero here, no error and we can go ahead.
     }
 
-    /* Get fractional baud rate divider */
-    fbrd = inClk % (ovsam * baud);
-    fbrd *= 128;
-    fbrd += 1;
-    fbrd /= (ovsam * baud);
-    fbrd >>= 1;
+	fbrd = (((inClk % (ovsam * baud)) * 64 ) + ((ovsam * baud) / 2)) / (ovsam * baud);
 
     /* Load oversampling, integer divider, and fractional divider to HW */
     DL_UART_setOversampling(module->hw, ovsamTag);
@@ -1226,6 +1235,7 @@ static void MSP_ARM_USART_ResetState(DRIVER_USART_MSP *module)
     module->state->txTarCnt = 0U;
 
     /* Reset enables */
+    module->state->powerState = ARM_POWER_OFF;
     module->state->transmitterEnabled = 0U;
     module->state->receiverEnabled = 0U;
     module->state->receiverDMAAvail = false;

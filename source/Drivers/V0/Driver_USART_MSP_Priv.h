@@ -52,7 +52,7 @@
 /*!
  * @brief The CMSIS-Driver USART MSP driver version (major/minor)
  */
-#define ARM_USART_DRV_VERSION    ARM_DRIVER_VERSION_MAJOR_MINOR(0, 10)
+#define ARM_USART_DRV_VERSION    ARM_DRIVER_VERSION_MAJOR_MINOR(1, 0)
 
 /*!
  * @brief The USART driver RX timeout value, defaulted to MAX value.
@@ -63,6 +63,16 @@
  *        ARM_USART_EVENT_RX_PARITY_ERROR event signal.
  */
 #define DRIVER_USART_MSP_TIMEOUT_BIT_PERIODS (0x0FU)
+
+/**
+ * @brief Define value for driver uninitialized.
+ */
+#define DRIVER_UNINITIALIZED 0
+
+/**
+ * @brief Define value for driver initialized.
+ */
+#define DRIVER_INITIALIZED 1
  
 /**
  * @brief Stores a pointer to the address of the MSP UART hardware registers.
@@ -102,6 +112,8 @@ typedef struct
     * Set by calling application.
     * Transmit completion signal is asserted when txCnt == txTarCnt. */
     uint32_t txTarCnt;
+    /* USART initialization done flag */
+    uint8_t initDone : 1;
     /* Transmitter enable */
     uint8_t transmitterEnabled : 1;
     /* Receiver enable */

@@ -44,13 +44,23 @@
 /*!
  * @brief The CMSIS-Driver SPI MSP driver version (major/minor)
  */
-#define ARM_SPI_DRV_VERSION    ARM_DRIVER_VERSION_MAJOR_MINOR(0, 30)
+#define ARM_SPI_DRV_VERSION    ARM_DRIVER_VERSION_MAJOR_MINOR(1, 0)
 
 /**
  * @brief Stores a pointer to the address of the MSP SPI hardware registers.
  *        for the corresponding SPI hardware peripheral instance.
  */
 typedef SPI_Regs DRIVER_SPI_MSP_HW;
+
+/**
+ * @brief Define value for driver uninitialized.
+ */
+#define DRIVER_UNINITIALIZED 0
+
+/**
+ * @brief Define value for driver initialized.
+ */
+#define DRIVER_INITIALIZED 1
 
 /**
  * @brief Define value for driver operating in target mode.
@@ -106,10 +116,15 @@ typedef SPI_Regs DRIVER_SPI_MSP_HW;
 #define MAX_SCR_VALUE 0x3FF
 
 /**
+ * @brief Define value for the maximum depth of the FIFO in hardware.
+ */
+#define MAX_FIFO_DEPTH 0x4
+
+/**
  * @brief Enum data structure to capture the state of the SPI bus. 
  */
 typedef enum SPI_STATE {
-	SPI_STATE_IDLE,
+    SPI_STATE_IDLE,
     SPI_STATE_SEND_WAITING,
     SPI_STATE_SEND_IN_PROGRESS,
     SPI_STATE_RECEIVE_WAITING,
@@ -155,6 +170,8 @@ typedef struct
     uint8_t bytesPerFrame;
     /* Default transmission value, set by Control */
     uint32_t defaultTxValue;
+    /* SPI initalization done flag */
+    uint8_t initDone : 1;
     /* SPI active flag */
     uint8_t active  : 1;
     /* SPI peripheral direction */
@@ -472,6 +489,7 @@ extern uint32_t MSP_ARM_SPI_GetDataCount(DRIVER_SPI_MSP *module);
  *
  *  @param[in]  module Pointer to the driver instance root data structure.
  * 
+ *
  *  @return     ARM_SPI_STATUS reflecting current driver instance status.
  * 
  */

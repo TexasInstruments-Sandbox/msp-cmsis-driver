@@ -108,6 +108,7 @@ int32_t MSP_ARM_SPI_Initialize(DRIVER_SPI_MSP *module,
                                         ARM_SPI_SignalEvent_t cb_event)
 {
     MSP_ARM_SPI_ResetState(module);
+    module->state->initDone = DRIVER_INITIALIZED;
     module->state->callback = cb_event;
 
     /* Since it is not known what mode (controller or target) the driver 
@@ -162,11 +163,19 @@ int32_t MSP_ARM_SPI_Uninitialize(DRIVER_SPI_MSP *module)
         // If no IO is defined, we have nothing to uninitialize.
     }
 
+    MSP_ARM_SPI_PowerControl(module, ARM_POWER_OFF);
+    MSP_ARM_SPI_ResetState(module);
+    module->state->initDone = DRIVER_UNINITIALIZED;
     return ARM_DRIVER_OK;
 }
 
 int32_t MSP_ARM_SPI_PowerControl(DRIVER_SPI_MSP *module, ARM_POWER_STATE state)
 {
+    if(state != ARM_POWER_OFF && module->state->initDone != DRIVER_INITIALIZED)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+
     DL_SPI_ClockConfig clkCfg;
     int32_t err = ARM_DRIVER_OK;
     int32_t transmitDMAErr;
@@ -265,7 +274,6 @@ int32_t MSP_ARM_SPI_PowerControl(DRIVER_SPI_MSP *module, ARM_POWER_STATE state)
                 if(err == ARM_DRIVER_OK)
                 {
                     NVIC_EnableIRQ(module->irq);
-                    DL_SPI_enableInterrupt(module->hw, DL_SPI_INTERRUPT_RX);
                     module->state->powerState = ARM_POWER_FULL;
                 }
                 else
@@ -410,7 +418,7 @@ int32_t MSP_ARM_SPI_Control(DRIVER_SPI_MSP *module, uint32_t control,
             break;
         case ARM_SPI_SET_BUS_SPEED:
             SCR = ((module->clockFreq / arg) - 2) / 2;
-            if(SCR > MAX_SCR_VALUE)
+            if(SCR > MAX_SCR_VALUE || SCR == 0)
             {
                 ret = ARM_DRIVER_ERROR_PARAMETER;
             }
@@ -422,7 +430,14 @@ int32_t MSP_ARM_SPI_Control(DRIVER_SPI_MSP *module, uint32_t control,
             return ret;
         case ARM_SPI_GET_BUS_SPEED:
             SCR = DL_SPI_getBitRateSerialClockDivider(module->hw);
-            ret = module->clockFreq / ((SCR * 2) + 2);
+            if(SCR == 0)
+            {
+                ret = 0;
+            }
+            else
+            {
+                ret = module->clockFreq / ((SCR + 1) * 2);
+            }
             DL_SPI_enable(module->hw);
             return ret;
         case ARM_SPI_SET_DEFAULT_TX_VALUE:
@@ -467,13 +482,20 @@ int32_t MSP_ARM_SPI_Control(DRIVER_SPI_MSP *module, uint32_t control,
             DL_SPI_disable(module->hw);
             DL_SPI_saveConfiguration(module->hw, &config);
             DL_SPI_reset(module->hw);
-            DL_SPI_restoreConfiguration(module->hw, &config);
             module->state->rxCnt = 0;
             module->state->rxTarCnt = 0;
             module->state->txCnt = 0;
             module->state->txTarCnt = 0;
             module->state->spiState = SPI_STATE_IDLE;
-            DL_SPI_enable(module->hw);
+            module->state->status.busy = DRIVER_NOT_BUSY;
+            module->state->status.data_lost = DATA_LOST_CLEAR;
+            module->state->status.mode_fault = MODE_FAULT_CLEAR;
+            DL_SPI_enablePower(module->hw);
+            __NOP(); /* Insert 4 NOPs for power enable cycle time */
+            __NOP();
+            __NOP();
+            __NOP();
+            DL_SPI_restoreConfiguration(module->hw, &config);
             return ret;
         default:
             ret = ARM_DRIVER_ERROR_PARAMETER;
@@ -657,6 +679,11 @@ int32_t MSP_ARM_SPI_Control(DRIVER_SPI_MSP *module, uint32_t control,
 
 int32_t MSP_ARM_SPI_Send(DRIVER_SPI_MSP *module, const void* data, uint32_t num)
 {
+    if(module->state->powerState != ARM_POWER_FULL)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+
     if((data == NULL) || (num == 0))
     {
         return ARM_DRIVER_ERROR_PARAMETER;
@@ -685,6 +712,7 @@ int32_t MSP_ARM_SPI_Send(DRIVER_SPI_MSP *module, const void* data, uint32_t num)
     module->state->txBuf = data;
     module->state->txTarCnt = num;
     module->state->txCnt = 0;
+    module->state->rxCnt = 0;
 
     /* DMA-Driven Send */
     if(module->state->transmitDMAAvail == true)
@@ -727,31 +755,23 @@ int32_t MSP_ARM_SPI_Send(DRIVER_SPI_MSP *module, const void* data, uint32_t num)
                                 module->state->txTarCnt);
         }
 
-        if(module->state->txCnt >= module->state->txTarCnt)
-        {
-            if(module->state->callback)
-            {
-                module->state->callback(ARM_SPI_EVENT_TRANSFER_COMPLETE);
-            }
-            else
-            {
-
-            }
-        }
-        else
-        {
-            DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_TX);
-            DL_SPI_enableInterrupt(module->hw,  DL_SPI_INTERRUPT_TX);
-        }
+        DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_TX |\
+                                                DL_SPI_INTERRUPT_TX_EMPTY);
+        DL_SPI_enableInterrupt(module->hw,  DL_SPI_INTERRUPT_TX |\
+                                            DL_SPI_INTERRUPT_TX_EMPTY);
     }
     DL_SPI_enable(module->hw);
     return ARM_DRIVER_OK;
 }
 
 int32_t MSP_ARM_SPI_Receive(DRIVER_SPI_MSP *module, void *data,
+
                             uint32_t num)
 {
-    uint32_t i;
+    if(module->state->powerState != ARM_POWER_FULL)
+    {
+        return ARM_DRIVER_ERROR;
+    }
 
     if((data == NULL) || (num == 0))
     {
@@ -761,7 +781,7 @@ int32_t MSP_ARM_SPI_Receive(DRIVER_SPI_MSP *module, void *data,
     {
         return ARM_DRIVER_ERROR_BUSY;
     }
-    /* Driver configured is configued as a slave with a software controlled
+    /* Driver configured is configured as a slave with a software controlled
      * select, but the select signal has not be set active via
      * MSP_ARM_SPI_CONTROL with ARM_SPI_CONTROL_SS.
      */
@@ -776,20 +796,42 @@ int32_t MSP_ARM_SPI_Receive(DRIVER_SPI_MSP *module, void *data,
         DL_SPI_disable(module->hw);
     }
 
+    uint32_t i;
     module->state->status.data_lost = DATA_LOST_CLEAR;    
     module->state->status.busy = DRIVER_BUSY;
     module->state->spiState = SPI_STATE_RECEIVE_IN_PROGRESS;
     module->state->rxBuf = data;
     module->state->rxTarCnt = num;
     module->state->rxCnt = 0;
+    module->state->txCnt = 0;
 
     if((uint8_t)DL_SPI_getDataSize(module->hw) >= 8)
     {
         module->state->bytesPerFrame = 2;
+        DL_SPI_enable(module->hw);
+        while(!DL_SPI_isRXFIFOEmpty(module->hw))
+        {
+            if(module->state->spiState != SPI_STATE_RECEIVE_IN_PROGRESS)
+            {
+                return ARM_DRIVER_OK;
+            }
+            DL_SPI_receiveData16(module->hw);
+        }
+        DL_SPI_disable(module->hw);
     }
     else
     {
         module->state->bytesPerFrame = 1;
+        DL_SPI_enable(module->hw);
+        while(!DL_SPI_isRXFIFOEmpty(module->hw))
+        {
+            if(module->state->spiState != SPI_STATE_RECEIVE_IN_PROGRESS)
+            {
+                return ARM_DRIVER_OK;
+            }
+            DL_SPI_receiveData8(module->hw);
+        }
+        DL_SPI_disable(module->hw);
     }
 
     /* DMA-Driven Receive */
@@ -838,12 +880,17 @@ int32_t MSP_ARM_SPI_Receive(DRIVER_SPI_MSP *module, void *data,
                 }
                 DL_SPI_fillTXFIFO8(module->hw, &buf[0], module->state->rxTarCnt);
             }
-            DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_TX);
-            DL_SPI_enableInterrupt(module->hw, DL_SPI_INTERRUPT_TX);
+            DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_RX |\
+                                                    DL_SPI_INTERRUPT_TX |\
+                                                    DL_SPI_INTERRUPT_TX_EMPTY);
+            DL_SPI_enableInterrupt(module->hw, DL_SPI_INTERRUPT_RX |\
+                                               DL_SPI_INTERRUPT_TX |\
+                                               DL_SPI_INTERRUPT_TX_EMPTY);
         }
         else
         {
             /* Slave can only register the operation */
+            DL_SPI_enableInterrupt(module->hw, DL_SPI_INTERRUPT_RX);
         }
     }
     DL_SPI_enable(module->hw);
@@ -853,6 +900,11 @@ int32_t MSP_ARM_SPI_Receive(DRIVER_SPI_MSP *module, void *data,
 int32_t MSP_ARM_SPI_Transfer(DRIVER_SPI_MSP *module, const void *data_out,
     void *data_in, uint32_t num)
 {
+    if(module->state->powerState != ARM_POWER_FULL)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+
     if((data_out == NULL) || (data_in == NULL) || (num == 0))
     {
         return ARM_DRIVER_ERROR_PARAMETER;
@@ -869,10 +921,22 @@ int32_t MSP_ARM_SPI_Transfer(DRIVER_SPI_MSP *module, const void *data_out,
     if((uint8_t)DL_SPI_getDataSize(module->hw) >= 8)
     {
         module->state->bytesPerFrame = 2;
+        DL_SPI_enable(module->hw);
+        while(!DL_SPI_isRXFIFOEmpty(module->hw))
+        {
+            DL_SPI_receiveData16(module->hw);
+        }
+        DL_SPI_disable(module->hw);
     }
     else
     {
         module->state->bytesPerFrame = 1;
+        DL_SPI_enable(module->hw);
+        while(!DL_SPI_isRXFIFOEmpty(module->hw))
+        {
+            DL_SPI_receiveData8(module->hw);
+        }
+        DL_SPI_disable(module->hw);
     }
 
     module->state->status.data_lost = DATA_LOST_CLEAR;
@@ -936,10 +1000,12 @@ int32_t MSP_ARM_SPI_Transfer(DRIVER_SPI_MSP *module, const void *data_out,
                 DL_SPI_fillTXFIFO8(module->hw, (uint8_t*)module->state->txBuf,\
                                    module->state->txTarCnt);
         }
-        DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_TX |
-                                                DL_SPI_INTERRUPT_RX);
+        DL_SPI_clearInterruptStatus(module->hw, DL_SPI_INTERRUPT_RX |
+                                                DL_SPI_INTERRUPT_TX |
+                                                DL_SPI_INTERRUPT_TX_EMPTY);
         DL_SPI_enableInterrupt(module->hw, DL_SPI_INTERRUPT_RX |\
-                                           DL_SPI_INTERRUPT_TX);
+                                           DL_SPI_INTERRUPT_TX |\
+                                           DL_SPI_INTERRUPT_TX_EMPTY);
     }
     DL_SPI_enable(module->hw);
     return ARM_DRIVER_OK;
@@ -949,39 +1015,31 @@ uint32_t MSP_ARM_SPI_GetDataCount(DRIVER_SPI_MSP *module)
 {
     uint32_t count;
 
-    if(module->state->status.busy == DRIVER_NOT_BUSY ||\
-       module->state->spiState == SPI_STATE_IDLE)
+    if(module->state->transmitDMAAvail == 1)
     {
-        count = 0;
+        count = module->state->txTarCnt -
+                DL_DMA_getTransferSize(module->transmitDMA.hw,\
+                                        module->transmitDMA.ch);
+    }
+    else if(module->state->receiveDMAAvail == 1)
+    {
+        count = module->state->rxTarCnt -
+                DL_DMA_getTransferSize(module->receiveDMA.hw,\
+                                        module->receiveDMA.ch);
     }
     else
     {
-        if(module->state->spiState == SPI_STATE_SEND_IN_PROGRESS)
+        if(module->state->txCnt != 0 && module->state->rxCnt == 0)
         {
-            if(module->state->transmitDMAAvail == 1)
-            {
-                count = module->state->txTarCnt - 
-                        DL_DMA_getTransferSize(module->transmitDMA.hw,\
-                                                module->transmitDMA.ch);
-            }
-            else
-            {
-                count = module->state->txCnt;
-            }
+            count = module->state->txCnt;
         }
-        else if(module->state->spiState == SPI_STATE_RECEIVE_IN_PROGRESS ||\
-                module->state->spiState == SPI_STATE_TRANSFER_IN_PROGRESS)
+        else if(module->state->rxCnt != 0 && module->state->txCnt == 0)
         {
-            if(module->state->receiveDMAAvail == 1)
-            {
-                count = module->state->rxTarCnt - 
-                        DL_DMA_getTransferSize(module->receiveDMA.hw,\
-                                                module->receiveDMA.ch);
-            }
-            else
-            {
-                count = module->state->rxCnt;
-            }
+            count = module->state->rxCnt;
+        }
+        else if(module->state->rxCnt != 0 && module->state->txCnt != 0)
+        {
+            count = module->state->rxCnt;
         }
         else
         {
@@ -1058,11 +1116,11 @@ void MSP_ARM_SPI_IRQHandler(DRIVER_SPI_MSP *module)
                 if(module->state->spiState == SPI_STATE_RECEIVE_IN_PROGRESS &&\
                    module->state->rxCnt == module->state->rxTarCnt)
                 {
-                    DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_RX);
                     if(module->state->callback)
                     {
                         module->state->status.busy = DRIVER_NOT_BUSY;
                         module->state->spiState = SPI_STATE_IDLE;
+                        DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_TX | DL_SPI_INTERRUPT_RX);
                         module->state->callback\
                             (ARM_SPI_EVENT_TRANSFER_COMPLETE);
                     }
@@ -1075,8 +1133,7 @@ void MSP_ARM_SPI_IRQHandler(DRIVER_SPI_MSP *module)
                         module->state->rxCnt == module->state->rxTarCnt &&\
                         module->state->txCnt == module->state->txTarCnt)
                 {
-                    DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_RX |\
-                                                        DL_SPI_INTERRUPT_TX);
+                    DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_TX | DL_SPI_INTERRUPT_RX);
                     if(module->state->callback)
                     {
                         module->state->status.busy = DRIVER_NOT_BUSY;
@@ -1117,23 +1174,34 @@ void MSP_ARM_SPI_IRQHandler(DRIVER_SPI_MSP *module)
 
             }
             break;
+        case DL_SPI_IIDX_TX_EMPTY:
         case DL_SPI_IIDX_TX:
             /* Driver actively sending or transferring */
             if((module->state->spiState == SPI_STATE_SEND_IN_PROGRESS ||
                 module->state->spiState == SPI_STATE_TRANSFER_IN_PROGRESS)\
                 && (module->state->txCnt < module->state->txTarCnt))
             {
+                uint8_t txLen;
+                if(module->state->txTarCnt - module->state->txCnt > 0)
+                {
+                    txLen = (module->state->txTarCnt - module->state->txCnt) > MAX_FIFO_DEPTH ?\
+                             MAX_FIFO_DEPTH : (module->state->txTarCnt - module->state->txCnt);
+                }
+                else
+                {
+                    txLen = 0;
+                }
                 if(module->state->bytesPerFrame == 2)
                 {
                     module->state->txCnt += DL_SPI_fillTXFIFO16(module->hw,\
                     &((uint16_t*)module->state->txBuf)[module->state->txCnt],\
-                    module->state->txTarCnt - module->state->txCnt);
+                    txLen);
                 }
                 else
                 {
                     module->state->txCnt += DL_SPI_fillTXFIFO8(module->hw,\
                     &((uint8_t*)module->state->txBuf)[module->state->txCnt],\
-                    module->state->txTarCnt - module->state->txCnt);
+                    txLen);
                 }
 
                 if(module->state->spiState == SPI_STATE_SEND_IN_PROGRESS &&\
@@ -1151,6 +1219,22 @@ void MSP_ARM_SPI_IRQHandler(DRIVER_SPI_MSP *module)
                     {
 
                     }
+                }
+                else
+                {
+
+                }
+            }
+            else if(module->state->spiState == SPI_STATE_SEND_IN_PROGRESS &&\
+                    module->state->txCnt >= module->state->txTarCnt)
+            {
+                DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_TX);
+                if(module->state->callback)
+                {
+                    module->state->status.busy = DRIVER_NOT_BUSY;
+                    module->state->spiState = SPI_STATE_IDLE;
+                    DL_SPI_disableInterrupt(module->hw, DL_SPI_INTERRUPT_TX);
+                    module->state->callback(ARM_SPI_EVENT_TRANSFER_COMPLETE);
                 }
                 else
                 {

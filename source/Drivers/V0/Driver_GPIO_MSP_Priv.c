@@ -75,6 +75,7 @@ int32_t MSP_ARM_GPIO_SetDirection(DRIVER_GPIO_MSP *module, ARM_GPIO_Pin_t pin,
     }
     else
     {
+        DL_GPIO_disableOutput(module->hw, (1 << pin));
         DL_GPIO_initDigitalInput(module->pinCMs[pin]);
     }
 
