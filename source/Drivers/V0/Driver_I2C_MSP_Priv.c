@@ -230,6 +230,7 @@ int32_t MSP_ARM_I2C_Initialize(DRIVER_I2C_MSP *module,
         // If no IO is defined, we have nothing to configure.
     }
 
+    module->state->initDone = DRIVER_INITIALIZED;
     return ARM_DRIVER_OK;
 }
 
@@ -257,11 +258,17 @@ int32_t MSP_ARM_I2C_Uninitialize(DRIVER_I2C_MSP *module)
         // If no IO is defined, we have nothing to uninitialize.
     }
 
+    module->state->initDone = DRIVER_UNINITIALIZED;
     return ARM_DRIVER_OK;
 }
 
 int32_t MSP_ARM_I2C_PowerControl(DRIVER_I2C_MSP *module, ARM_POWER_STATE state)
 {
+    if(state != ARM_POWER_OFF && module->state->initDone != DRIVER_INITIALIZED)
+    {
+        return ARM_DRIVER_ERROR;
+    }
+
     DL_I2C_ClockConfig clkCfg;
     int32_t err = ARM_DRIVER_OK;
     int32_t transmitDMAErr;
@@ -384,7 +391,7 @@ int32_t MSP_ARM_I2C_Control(DRIVER_I2C_MSP *module, uint32_t control,
         // Power state is ARM_POWER_FULL, no special action to take.
     }
 
-    if(control & ARM_I2C_OWN_ADDRESS)
+    if(control == ARM_I2C_OWN_ADDRESS)
     {
 
         // Configure as target if not yet already done
@@ -425,7 +432,7 @@ int32_t MSP_ARM_I2C_Control(DRIVER_I2C_MSP *module, uint32_t control,
         //Do nothing
     }
 
-    if(control & ARM_I2C_BUS_SPEED)
+    if(control == ARM_I2C_BUS_SPEED)
     {
         const uint32_t I2C_CLK  = module->clockFreq;
         uint8_t TPR = 0;
@@ -456,7 +463,8 @@ int32_t MSP_ARM_I2C_Control(DRIVER_I2C_MSP *module, uint32_t control,
         //Do nothing
     }
 
-    if((control & ARM_I2C_BUS_CLEAR) && module->state->controllerEnabled == 1)
+    if((control == ARM_I2C_BUS_CLEAR) &&\
+            module->state->controllerEnabled == 1)
     {
         DL_I2C_resetControllerTransfer(module->hw);
         uint8_t bus_clear[] = { 0x00 };
@@ -474,8 +482,8 @@ int32_t MSP_ARM_I2C_Control(DRIVER_I2C_MSP *module, uint32_t control,
 
     }
 
-    if((control & ARM_I2C_ABORT_TRANSFER) && 
-        module->state->i2cState != I2C_STATE_IDLE)
+    if((control == ARM_I2C_ABORT_TRANSFER) &&\
+            module->state->i2cState != I2C_STATE_IDLE)
     {
         if(module->state->controllerEnabled)
         {

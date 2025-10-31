@@ -364,6 +364,10 @@ The software is currently tested against the following device variants:
 
 The drivers are expected to work without major modifications on additional MSPM0 devices.
 
+## Driver Validation
+
+The USART, I2C, SPI, and GPIO drivers are validated using the using the [CMSIS-Driver_Validation](https://github.com/ARM-software/CMSIS-Driver_Validation) tests.
+
 ## Specification
 
 The MSP-CMSIS-DRIVER package specifications are provided below for reference.
@@ -461,12 +465,6 @@ The Driver_GPIO module supports the following capabilities:
 | MSPSWSDK-5795 | [SPS] CMSIS-Driver GPIO module feature: Output Control | The MSP-CMSIS-DRIVER GPIO module shall allow control of output on a pin. | Implemented |
 | MSPSWSDK-5796 | [SPS] CMSIS-Driver GPIO module feature: Read Input | The MSP-CMSIS-DRIVER GPIO shall allow reading the input of a pin. | Implemented |
 | MSPSWSDK-5797 | [SPS] CMSIS-Driver GPIO module feature: Trigger Event | The MSP-CMSIS-DRIVER GPIO shall provide a trigger edge event on a gpio pin via callback. | Implemented |
-
-## Known Issues
-
-| Bug ID        | Description             | Summary                                              | Status |
-| --------------|-------------------------|------------------------------------------------------|--------|
-| MSPSWSDK-5252 | [BUG] MSP-CMSIS-DRIVER USART Baud rate calculation error | During baud rate unit test, the following errors were seen:150B FBRD 1 less than expected, 4800B FBRD 1 less than expected, 19200B FBRD 1 less than expected. No issue seen with other baud rates and impact is minor. | Accepted |
 
 ## Licensing
 [License information](./LICENSE.md)

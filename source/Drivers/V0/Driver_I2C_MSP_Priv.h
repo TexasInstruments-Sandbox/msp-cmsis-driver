@@ -48,6 +48,16 @@
  */
 typedef I2C_Regs DRIVER_I2C_MSP_HW;
 
+/**
+ * @brief Define value for driver uninitialized.
+ */
+#define DRIVER_UNINITIALIZED 0
+
+/**
+ * @brief Define value for driver initialized.
+ */
+#define DRIVER_INITIALIZED 1
+
 
 /**
  * @brief Enum data structure to capture the state of the I2C bus. 
@@ -96,6 +106,8 @@ typedef struct
     uint32_t txTarCnt;
     /* State of the I2C Driver */
     I2C_STATE i2cState;
+    /* I2C initialization done flag */
+    uint8_t initDone : 1;
     /* I2C Controller mode enabled */
     uint8_t controllerEnabled : 1;
     /* I2C Target mode enabled */
