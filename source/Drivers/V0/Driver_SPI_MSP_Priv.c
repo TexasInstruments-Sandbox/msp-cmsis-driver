@@ -30,10 +30,11 @@
  *        driver capabilities supported by this driver implementation.
  */
 static const ARM_SPI_CAPABILITIES DriverCapabilities = {
-    0, /* Simplex Mode: deprecated and must be zero */
-    1, /* Supports TI Synchronous Serial Interface */
-    0, /* Supports Microwire Interface (unsupported) */
-    0, /* Supports Signal Mode Fault Event (unsupported) */
+    .simplex = 0,           /* Simplex Mode: deprecated and must be zero */
+    .ti_ssi = 1,            /* Supports TI Synchronous Serial Interface */
+    .microwire = 0,         /* Supports Microwire Interface (unsupported) */
+    .event_mode_fault = 0,  /* Supports Signal Mode Fault Event (unsupported) */
+    .reserved = 0,          /* Reserved: must be zero */
 };
 
 
@@ -63,6 +64,7 @@ static void MSP_ARM_SPI_ResetState(DRIVER_SPI_MSP *module)
     module->state->active = DRIVER_INACTIVE;
     module->state->status.data_lost = DATA_LOST_CLEAR;
     module->state->status.mode_fault = MODE_FAULT_CLEAR;
+    module->state->status.reserved = 0;
     module->state->direction = DIRECTION_SLAVE;
 }
 
